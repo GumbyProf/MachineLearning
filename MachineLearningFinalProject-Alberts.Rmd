@@ -1,0 +1,120 @@
+---
+title: "MachineLearning Final Project"
+author: "K. Scott Alberts"
+date: "November 4, 2016"
+output: html_document
+---
+
+## Executive Summary
+
+This project seeks to identify when certain exercises are performed with different kinds of mistakes. Two models were created from the sample data, one using Trees and one using Random Forests. The Random Forest model was found to be much better, so it was used to predict the
+twenty (20) test cases that were included.
+
+```{r setup, eval=TRUE, results='hide', cache=TRUE}
+#Load the libraries
+library(caret); library(plyr); library(dplyr); library(knitr)
+library(randomForest); library(rpart); library(rpart.plot); library(rattle)
+#Download the dataset;
+pmltraining <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", header=TRUE)
+pmltesting <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", header=TRUE)
+
+```
+
+## Project Assignment
+### Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+### Acknowledgement
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. 
+####This is an awesome data set that we can use here.
+
+
+We start by preparing and cleaning up the data.
+Divide the data into two sets.
+Remove variables that are labels, mostly NAs, and those with near zero variance.
+
+```{r prepare, cache=TRUE}
+set.seed(27)
+#Split Testingset up into two sets, to allow validation.
+inTrain <- createDataPartition(y=pmltraining$classe, p=0.7, list=FALSE)
+training <- pmltraining[inTrain,]
+testing <- pmltraining[-inTrain,]
+
+#Clean, nzv and NAs
+MostlyNA <- sapply(training, function(x) mean(is.na(x))) > 0.95
+training <- training[,MostlyNA==FALSE]
+testing <- testing[,MostlyNA==FALSE]
+#Down to 96 variables
+nzv <- nearZeroVar(training)
+training <- training[, -nzv]
+testing <- testing[,-nzv]
+#Down to 59 variables
+#X and cvtd_timestamp kept popping into models, so I took out the first five vars.
+#what about ID vars #1, vars 1:5?) They are just labels
+training <- training[,-(1:5)]
+testing <-testing[,-(1:5)]
+#Cleaned Dataset has 54 variables
+```
+
+## Model 1
+The first model attempted was a tree:
+
+
+```{r tree, cache=TRUE}
+#first model - DecisionTrees
+set.seed(27)
+TreeModel <- rpart(classe ~ . , data=training, method="class")
+fancyRpartPlot(TreeModel)
+predictionsTree <- predict(TreeModel, testing, type = "class")
+confusionTree <- confusionMatrix(predictionsTree, testing$classe)
+confusionTree
+confusionTree$overall[1]
+TreesAcc <- confusionTree$overall[1] #Accuracy = 71%
+```
+The tree worked OK, with Accuracy over 70%.
+The tree is hard to read here, I'm afraid.
+
+
+## Model 2
+The second model attempted was a random forest:
+
+```{r forest, echo=TRUE, cache=TRUE}
+#second model - Random Forest
+set.seed(27)
+ForestModel <- randomForest(classe ~ . , data=training)
+predictionsForest <- predict(ForestModel, testing, type="Class")
+confusionForest <- confusionMatrix(predictionsForest, testing$classe)
+confusionForest
+confusionForest$overall[1]
+ForestAcc <- confusionTree$overall[1] #Accuracy = 99.7%  ???
+````
+
+This had an accuracy rating over 99%, which is ridiculously accurate.
+So, we should use this one.
+
+
+###Test!
+Now we look at the twenty test cases
+
+```{r realtest, echo=TRUE, cache=TRUE}
+#Forest is wayyy better, so let's use that.
+RealTest <- predict(ForestModel, pmltesting, type="class" )
+RealTest
+````
+
+###Make a Text File with the results
+```{r write, echo=TRUE, cache=TRUE}
+# Write the results to a text file to turn it in.
+write_text_file = function(x){
+    n = length(x)
+    for(i in 1:n){
+        filename = paste0("problem_id_",i,".txt")
+        write.table(x[i],file=filename,quote=FALSE,
+                    row.names=FALSE,col.names=FALSE)
+    }
+}
+
+#Comment the line below except when you mean it :)
+# write_text_file(RealTest)
+````
